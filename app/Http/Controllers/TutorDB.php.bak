@@ -1,0 +1,179 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Book;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+class TutorDB extends Controller
+{
+    /**
+     * Display a listing of the resource.
+     */
+    public function index()
+    {
+        /** Coba pakai model */
+        $hasilBuku = Book::all();
+        dd($hasilBuku);
+
+        // // Cara 1: RAW Query
+        // $daftarBuku = DB::select('select * from book where id = 1');
+        // dump($daftarBuku);
+        // $daftarSupp = DB::connection('koneksi_supp')->select('select * from supplier');
+        // dump($daftarSupp);
+
+        /** 
+         * select * from book
+         * join ....;
+         * */
+        $keyword = "for";
+        $order = 1;
+        $awal = 1999;
+        $akhir = 2026;
+        $contohsusah = DB::connection('mysql')
+            ->table('book as b') // ->table biasakan paling atas
+            // ->select(['*'])
+            ->select(['id', 'title', 'price', 'author', 'tahun', 'b.genre_id', 'g.genre_nama'])
+            ->selectRaw("(case when tahun < ? then 'lama'
+                                else 'baru'
+                                end) as keterangan", [2003]) //selectRaw harus setelah select
+            ->join('genre as g', 'g.genre_id', '=', 'b.genre_id')
+            // ->where('b.genre_id', '!=', 'G01')
+            // ->where('title', 'like', "%$keyword%")
+            // ->orWhere("price", "<", 10)
+            ->where(function ($query) use ($awal, $akhir) {
+                $query->where('tahun', '<=', $awal)->orWhere('tahun', '>=', $akhir);
+            })
+            ->offset(2)
+            ->limit(5);
+
+        if ($order == 0) {
+            $contohsusah = $contohsusah->orderBy('tahun', 'asc');
+        } else {
+            $contohsusah = $contohsusah->orderBy('tahun', 'desc');
+        }
+
+
+        // $contohsusah = $contohsusah->toRawSql();
+        $contohsusah = $contohsusah->get();
+        dd($contohsusah);
+
+
+        // // Cara 2: Query Builder
+        // ->get() mau ambil semua dta nya (meskipun cuman 1)
+        // -first() pasti kembaliannya 1 data saja
+        $daftarBuku = DB::connection('mysql')
+            ->table("book")
+            ->orderBy('id', 'desc')
+            ->get();
+
+        // select * from genre
+        $daftarGenre = DB::table('genre')->get();
+        return view('tutordb.buku', compact('daftarBuku', 'daftarGenre'));
+    }
+
+    /**
+     * Show the form for creating a new resource.
+     */
+    public function create()
+    {
+        //
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     */
+    public function store(Request $request)
+    {
+        // // cara raw
+        // $result = DB::insert("insert into book(title,price,genre_id,author,tahun) values (?,?,?,?,?)", [
+        //     $request->title,
+        //     $request->price,
+        //     $request->genre_id,
+        //     $request->author,
+        //     $request->tahun,
+        // ]);
+
+        // // cara raw named parameter binding
+        // $result = DB::insert("insert into book(title,price,genre_id,author,tahun) values (:title,:price,:genre_id,:author,:tahun)", [
+        //     'title' => $request->title,
+        //     'price' => $request->price,
+        //     'genre_id' => $request->genre_id,
+        //     'author' => $request->author,
+        //     'tahun' => $request->tahun,
+        // ]);
+
+        // // Cara Query Builder
+        $result = DB::table('book')->insert([
+            'title' => $request->title,
+            'price' => $request->price,
+            'genre_id' => $request->genre_id,
+            'author' => $request->author,
+            'tahun' => $request->tahun,
+        ]);
+
+        if ($result) {
+            return redirect()->back()->with('pesan', 'Sukses insert buku');
+        } else {
+            return redirect()->back()->with('pesan', 'Gagal insert buku');
+        }
+    }
+
+    /**
+     * Display the specified resource.
+     */
+    public function show(string $id)
+    {
+        //
+    }
+
+    /**
+     * Show the form for editing the specified resource.
+     */
+    public function edit(Request $request)
+    {
+        $dataLama = DB::table("book")->where('id', '=', $request->id)->first();
+        $daftarGenre = DB::table('genre')->get();
+        return view('tutordb.edit', compact('dataLama', 'daftarGenre'));
+    }
+
+    /**
+     * Update the specified resource in storage.
+     */
+    public function update(Request $request)
+    {
+        // query builder
+        $result = DB::table('book')->where('id', '=', $request->id)->update([
+            'title' => $request->title,
+            'price' => $request->price,
+            'genre_id' => $request->genre_id,
+            'author' => $request->author,
+            'tahun' => $request->tahun,
+        ]);
+        if ($result) {
+            return redirect('tutordb')->with('pesan', 'Sukses ubah buku');
+        } else {
+            return redirect('tutordb')->with('pesan', 'Gagal ubah buku');
+        }
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     */
+    public function destroy(Request $request)
+    {
+        $idHapus = $request->id;
+        // raw
+        // $result = DB::delete("delete from book where id=?", [$idHapus]);
+
+        // query builder
+        $result = DB::table('book')->where('id', '=', $idHapus)->delete();
+
+        if ($result) {
+            return redirect()->back()->with('pesan', 'Sukses hapus buku');
+        } else {
+            return redirect()->back()->with('pesan', 'Gagal hapus buku');
+        }
+    }
+}
